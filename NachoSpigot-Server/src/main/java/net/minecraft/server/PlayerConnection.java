@@ -1,5 +1,6 @@
 package net.minecraft.server;
 
+import com.destroystokyo.paper.PaperConfig;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Floats;
@@ -16,6 +17,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
+
+import me.elier.nachospigot.config.NachoConfig; // Nacho
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -63,8 +66,6 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.util.NumberConversions;
 import co.aikar.timings.SpigotTimings; // Spigot
 // CraftBukkit end
-
-import org.github.paperspigot.PaperSpigotConfig; // PaperSpigot
 
 public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerListBox {
 
@@ -356,6 +357,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 double delta = Math.pow(this.lastPosX - to.getX(), 2) + Math.pow(this.lastPosY - to.getY(), 2) + Math.pow(this.lastPosZ - to.getZ(), 2);
                 float deltaAngle = Math.abs(this.lastYaw - to.getYaw()) + Math.abs(this.lastPitch - to.getPitch());
 
+                // Nacho start
                 if ((packetplayinflying.hasPos) && ((delta > 0.0D) && (this.checkMovement && !this.player.dead))) {
                     for (dev.cobblesword.nachospigot.protocol.MovementListener movementListener : Nacho.get().getMovementListeners()) {
                         try {
@@ -365,7 +367,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                         }
                     }
                 }
-                  
+
                 if ((packetplayinflying.hasLook) && ((deltaAngle > 0.0F) && (this.checkMovement && !this.player.dead))) {
                     for (dev.cobblesword.nachospigot.protocol.MovementListener movementListener : Nacho.get().getMovementListeners()) {
                         try {
@@ -375,6 +377,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                         }
                     }
                 }
+                // Nacho end
 
                 if ((delta > 1f / 256 || deltaAngle > 10f) && (this.checkMovement && !this.player.dead))
                 {
@@ -385,7 +388,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                     this.lastPitch = to.getPitch();
 
                     // Skip the first time we do this
-                    if (Nacho.get().getConfig().firePlayerMoveEvent) { // Spigot - don't skip any move events
+                    if (NachoConfig.firePlayerMoveEvent) { // Spigot - don't skip any move events
                         Location oldTo = to.clone();
                         PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
                         this.server.getPluginManager().callEvent(event);
@@ -793,7 +796,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
         WorldServer worldserver = this.minecraftServer.getWorldServer(this.player.dimension);
         boolean throttled = false;
         // PaperSpigot - Allow disabling the player interaction limiter
-        if (org.github.paperspigot.PaperSpigotConfig.interactLimitEnabled && lastPlace != -1 && packetplayinblockplace.timestamp - lastPlace < 30 && packets++ >= 4) {
+        if (PaperConfig.interactLimitEnabled && lastPlace != -1 && packetplayinblockplace.timestamp - lastPlace < 30 && packets++ >= 4) {
             throttled = true;
         } else if ( packetplayinblockplace.timestamp - lastPlace >= 30 || lastPlace == -1 )
         {
@@ -887,6 +890,8 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 }
 
                 // SportPaper end
+            } else{
+                if(MinecraftServer.currentTick - lastDropTick > 1 && NachoConfig.fixEatWhileRunning) this.player.playerInteractManager.useItem(this.player, this.player.world, itemstack);
             }
             // Spigot end
 
@@ -896,7 +901,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
             always = (itemstack.count != itemstackAmount) || itemstack.getItem() == Item.getItemOf(Blocks.WATERLILY);
             // CraftBukkit end
         } else if (blockposition.getY() >= this.minecraftServer.getMaxBuildHeight() - 1 && (enumdirection == EnumDirection.UP || blockposition.getY() >= this.minecraftServer.getMaxBuildHeight())) {
-            ChatMessage chatmessage = new ChatMessage("build.tooHigh", new Object[] { Integer.valueOf(this.minecraftServer.getMaxBuildHeight())});
+            ChatMessage chatmessage = new ChatMessage("build.tooHigh", this.minecraftServer.getMaxBuildHeight());
 
             chatmessage.getChatModifier().setColor(EnumChatFormat.RED);
             this.player.playerConnection.sendPacket(new PacketPlayOutChat(chatmessage));
@@ -941,7 +946,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
             // CraftBukkit - TODO CHECK IF NEEDED -- new if structure might not need 'always'. Kept it in for now, but may be able to remove in future
             // KigPaper-0172
             if (
-                    Nacho.get().getConfig().stopDecodingItemStackOnPlace ? (
+                    NachoConfig.stopDecodingItemStackOnPlace ? (
                             !ItemStack.matches(this.player.inventory.getItemInHand(), itemstack) || always // KigPaper - use saved itemstack instead of stack from packet
                             ) :
                             (!ItemStack.matches(this.player.inventory.getItemInHand(), packetplayinblockplace.getItemStack()) || always)
@@ -1446,10 +1451,12 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
 
         case 3:
             this.player.setSprinting(true);
+            this.player.setExtraKnockback(true);
             break;
 
         case 4:
             this.player.setSprinting(false);
+            this.player.setExtraKnockback(false);
             break;
 
         case 5:
@@ -1836,19 +1843,6 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                         case ALLOW:
                         case DEFAULT:
                             itemstack = this.player.activeContainer.clickItem(packetplayinwindowclick.b(), packetplayinwindowclick.c(), packetplayinwindowclick.f(), this.player);
-                            // PaperSpigot start - Stackable Buckets
-                            if (itemstack != null &&
-                                    ((itemstack.getItem() == Items.LAVA_BUCKET && PaperSpigotConfig.stackableLavaBuckets) ||
-                                            (itemstack.getItem() == Items.WATER_BUCKET && PaperSpigotConfig.stackableWaterBuckets) ||
-                                            (itemstack.getItem() == Items.MILK_BUCKET && PaperSpigotConfig.stackableMilkBuckets))) {
-                                if (action == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
-                                    this.player.updateInventory(this.player.activeContainer);
-                                } else {
-                                    this.player.playerConnection.sendPacket(new PacketPlayOutSetSlot(-1, -1, this.player.inventory.getCarried()));
-                                    this.player.playerConnection.sendPacket(new PacketPlayOutSetSlot(this.player.activeContainer.windowId, packetplayinwindowclick.b(), this.player.activeContainer.getSlot(packetplayinwindowclick.b()).getItem()));
-                                }
-                            }
-                            // PaperSpigot end
                             break;
                         case DENY:
                             /* Needs enum constructor in InventoryAction
@@ -2038,7 +2032,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                     entityitem.j();
                 }
             }
-        } else if (Nacho.get().getConfig().kickOnIllegalBehavior) {
+        } else if (NachoConfig.kickOnIllegalBehavior) {
             PlayerIllegalBehaviourEvent event = new PlayerIllegalBehaviourEvent(
                     this.server.getPlayer(this.player),
                     PlayerIllegalBehaviourEvent.IllegalType.CREATIVE_ACTION_NOT_IN_CREATIVE
@@ -2161,7 +2155,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
     public void a(PacketPlayInCustomPayload packetplayincustompayload) {
         PlayerConnectionUtils.ensureMainThread(packetplayincustompayload, this, this.player.u());
         if(isExploiter) return; // NachoSpigot - ignore if they have exploited
-        PacketDataSerializer packetdataserializer;
+        PacketDataSerializer serializer;
         ItemStack itemstack;
         ItemStack itemstack1;
 
@@ -2189,10 +2183,10 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 return;
             }
 
-            packetdataserializer = new PacketDataSerializer(Unpooled.wrappedBuffer(packetplayincustompayload.b()));
+            serializer = new PacketDataSerializer(Unpooled.wrappedBuffer(packetplayincustompayload.b()));
 
             try {
-                itemstack = packetdataserializer.decodeItemStack();
+                itemstack = serializer.decodeItemStack();
                 if (itemstack == null) {
                     return;
                 }
@@ -2216,7 +2210,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 this.disconnect("Invalid book data!"); // CraftBukkit
                 return;
             } finally {
-                packetdataserializer.release();
+                serializer.release();
             }
 
             return;
@@ -2225,10 +2219,10 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 disconnect("Book edited too quickly!");
                 return;
             }
-            packetdataserializer = new PacketDataSerializer(Unpooled.wrappedBuffer(packetplayincustompayload.b()));
+            serializer = new PacketDataSerializer(Unpooled.wrappedBuffer(packetplayincustompayload.b()));
 
             try {
-                itemstack = packetdataserializer.decodeItemStack();
+                itemstack = serializer.decodeItemStack();
                 if (itemstack == null) {
                     return;
                 }
@@ -2257,7 +2251,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                 this.disconnect("Invalid book data!"); // CraftBukkit
                 return;
             } finally {
-                packetdataserializer.release();
+                serializer.release();
             }
 
             return;
@@ -2277,28 +2271,28 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
             if (!this.minecraftServer.getEnableCommandBlock()) {
                 this.player.sendMessage(new ChatMessage("advMode.notEnabled"));
             } else if (this.player.getBukkitEntity().isOp() && this.player.abilities.canInstantlyBuild) { // CraftBukkit - Change to Bukkit OP versus Vanilla OP
-                packetdataserializer = packetplayincustompayload.b();
+                serializer = packetplayincustompayload.b();
 
                 try {
-                    byte b0 = packetdataserializer.readByte();
+                    byte b0 = serializer.readByte();
                     CommandBlockListenerAbstract commandblocklistenerabstract = null;
 
                     if (b0 == 0) {
-                        TileEntity tileentity = this.player.world.getTileEntity(new BlockPosition(packetdataserializer.readInt(), packetdataserializer.readInt(), packetdataserializer.readInt()));
+                        TileEntity tileentity = this.player.world.getTileEntity(new BlockPosition(serializer.readInt(), serializer.readInt(), serializer.readInt()));
 
                         if (tileentity instanceof TileEntityCommand) {
                             commandblocklistenerabstract = ((TileEntityCommand) tileentity).getCommandBlock();
                         }
                     } else if (b0 == 1) {
-                        Entity entity = this.player.world.a(packetdataserializer.readInt());
+                        Entity entity = this.player.world.a(serializer.readInt());
 
                         if (entity instanceof EntityMinecartCommandBlock) {
                             commandblocklistenerabstract = ((EntityMinecartCommandBlock) entity).getCommandBlock();
                         }
                     }
 
-                    String s = packetdataserializer.c(packetdataserializer.readableBytes());
-                    boolean flag = packetdataserializer.readBoolean();
+                    String s = serializer.c(serializer.readableBytes());
+                    boolean flag = serializer.readBoolean();
 
                     if (commandblocklistenerabstract != null) {
                         commandblocklistenerabstract.setCommand(s);
@@ -2314,7 +2308,7 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
                     PlayerConnection.c.error("Couldn\'t set command block", exception3);
                     this.disconnect("Invalid CommandBlock data!"); // CraftBukkit
                 } finally {
-                    packetdataserializer.release();
+                    serializer.release();
                 }
             } else {
                 this.player.sendMessage(new ChatMessage("advMode.notAllowed", new Object[0]));
@@ -2322,9 +2316,9 @@ public class PlayerConnection implements PacketListenerPlayIn, IUpdatePlayerList
         } else if ("MC|Beacon".equals(packetplayincustompayload.a())) {
             if (this.player.activeContainer instanceof ContainerBeacon) {
                 try {
-                    packetdataserializer = packetplayincustompayload.b();
-                    int j = packetdataserializer.readInt();
-                    int k = packetdataserializer.readInt();
+                    serializer = packetplayincustompayload.b();
+                    int j = serializer.readInt();
+                    int k = serializer.readInt();
                     ContainerBeacon containerbeacon = (ContainerBeacon) this.player.activeContainer;
                     Slot slot = containerbeacon.getSlot(0);
 

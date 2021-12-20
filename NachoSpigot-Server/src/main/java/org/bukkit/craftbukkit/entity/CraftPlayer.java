@@ -1,7 +1,6 @@
 package org.bukkit.craftbukkit.entity;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.mojang.authlib.GameProfile;
 import dev.cobblesword.nachospigot.commons.Constants;
@@ -15,6 +14,8 @@ import java.net.SocketAddress;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import me.elier.nachospigot.config.NachoConfig;
 import net.md_5.bungee.api.chat.BaseComponent;
 
 import net.minecraft.server.*;
@@ -60,7 +61,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.StandardMessenger;
 import org.bukkit.scoreboard.Scoreboard;
 // PaperSpigot start
-import org.github.paperspigot.Title;
+import com.destroystokyo.paper.Title;
 // PaperSpigot end
 
 @DelegateDeserialization(CraftOfflinePlayer.class)
@@ -962,6 +963,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
 
     @Override
     public void hidePlayer(Player player) {
+        hidePlayer(player, true);
+    }
+
+    @Override
+    public void hidePlayer(Player player, boolean onTab) {
         Validate.notNull(player, "hidden player cannot be null");
         if (getHandle().playerConnection == null) return;
         if (equals(player)) return;
@@ -977,7 +983,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
         }
 
         //remove the hidden player from this player user list
-        getHandle().playerConnection.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.REMOVE_PLAYER, other));
+        if (onTab) {
+            getHandle().playerConnection.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.REMOVE_PLAYER, other));
+        }
     }
 
     @Override
@@ -1006,6 +1014,37 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
     @Override
     public boolean canSee(Player player) {
         return !hiddenPlayers.contains(player.getUniqueId());
+    }
+
+    @Override
+    public boolean canSee(org.bukkit.entity.Entity entity) {
+        Entity nmsEntity = ((CraftEntity) entity).getHandle();
+        if (nmsEntity instanceof EntityPlayer) {
+            return this.canSee((Player) entity);
+        }
+
+        // Projectiles from hidden players
+        if(NachoConfig.hideProjectilesFromHiddenPlayers) {
+            if (nmsEntity instanceof EntityProjectile) {
+                EntityProjectile entityProjectile = (EntityProjectile) nmsEntity;
+
+                if (entityProjectile.getShooter() instanceof EntityPlayer) {
+                    return this.canSee(((EntityPlayer) entityProjectile.getShooter()).getBukkitEntity());
+                }
+            }
+
+            if (nmsEntity instanceof EntityArrow) {
+                EntityArrow entityProjectile = (EntityArrow) nmsEntity;
+
+                if (entityProjectile.shooter instanceof EntityPlayer) {
+                    return this.canSee(((EntityPlayer) entityProjectile.shooter).getBukkitEntity());
+                }
+            }
+
+
+        }
+
+        return true;
     }
 
     @Override

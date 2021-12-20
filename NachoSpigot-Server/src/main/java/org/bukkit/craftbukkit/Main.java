@@ -20,6 +20,8 @@ public class Main {
     public static boolean useConsole = true;
 
     public static void main(String[] args) {
+        System.setProperty("log4j2.formatMsgNoLookups", "true");
+
         try {
             if(!SystemUtils.isJavaVersionAtLeast(JavaVersion.JAVA_15)) {
                 System.err.println("It seems like you are not using Java 15!");
@@ -134,7 +136,7 @@ public class Main {
                 // Spigot End
 
                 // PaperSpigot Start
-                acceptsAll(asList("paper", "paper-settings"), "File for paperspigot settings")
+                acceptsAll(asList("paper", "paper-settings"), "File for paper settings")
                         .withRequiredArg()
                         .ofType(File.class)
                         .defaultsTo(new File("paper.yml"))
@@ -148,6 +150,18 @@ public class Main {
                         .defaultsTo(new File("taco.yml"))
                         .describedAs("Yml file");
                 // TacoSpigot end
+                // NachoSpigot start
+                acceptsAll(asList("nacho", "nacho-settings"), "File for nachospigot settings")
+                        .withRequiredArg()
+                        .ofType(File.class)
+                        .defaultsTo(new File("nacho.yml"))
+                        .describedAs("Yml file");
+                acceptsAll(asList("knockback", "knockback-settings"), "File for nachospigot knockback settings")
+                        .withRequiredArg()
+                        .ofType(File.class)
+                        .defaultsTo(new File("knockback.yml"))
+                        .describedAs("Yml file");
+                // NachoSpigot end
             }
         };
 
@@ -188,6 +202,7 @@ public class Main {
                 }
 
                 if (useJline) {
+                    System.setProperty( "library.jansi.version", "NachoSpigot" );
                     AnsiConsole.systemInstall();
                 } else {
                     // This ensures the terminal literal will always match the jline implementation

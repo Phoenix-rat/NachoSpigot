@@ -1,8 +1,7 @@
 name: NachoSpigot Build
 
-on:
-  push:
-    branches: [master]
+on: [push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,17 +15,22 @@ jobs:
         server-id: github
         settings-path: ${{ github.workspace }}
 
+    - name: Install minecraft-server to local repo
+      run: |
+        git submodule update --init
+        ./remap.sh
+
     - name: Build with Maven
       run: mvn clean package --file $GITHUB_WORKSPACE/pom.xml
       
     - name: Upload Server Artifact
       uses: actions/upload-artifact@v2.2.0
       with:
-        name: NachoSpigot server JAR
+        name: NachoSpigot-server
         path: ${{ github.workspace }}/NachoSpigot-Server/target/NachoSpigot.jar
 
     - name: Upload API Artifact
       uses: actions/upload-artifact@v2.2.0
       with:
-        name: NachoSpigot API JAR
+        name: NachoSpigot-API
         path: ${{ github.workspace }}/NachoSpigot-API/target/NachoSpigot-API.jar

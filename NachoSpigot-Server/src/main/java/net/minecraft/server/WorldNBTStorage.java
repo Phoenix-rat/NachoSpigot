@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.UUID;
 
 import org.bukkit.craftbukkit.entity.CraftPlayer;
+import com.destroystokyo.paper.PaperConfig;
 // CraftBukkit end
 
 public class WorldNBTStorage implements IDataManager, IPlayerFileData {
@@ -39,6 +40,13 @@ public class WorldNBTStorage implements IDataManager, IPlayerFileData {
         }
 
         this.h();
+
+        // manually check lock on startup
+        try {
+            checkSession0();
+        } catch (Throwable t) {
+            org.spigotmc.SneakyThrow.sneaky(t);
+        }
     }
 
     private void h() {
@@ -62,7 +70,9 @@ public class WorldNBTStorage implements IDataManager, IPlayerFileData {
         return this.baseDir;
     }
 
-    public void checkSession() throws ExceptionWorldConflict {
+    public void checkSession() throws ExceptionWorldConflict {} // CraftBukkit - throws ExceptionWorldConflict
+
+    private void checkSession0() throws ExceptionWorldConflict { // we can safely do so as the server will stop upon detecting a session conflict on startup
         try {
             File file = new File(this.baseDir, "session.lock");
 
@@ -173,6 +183,7 @@ public class WorldNBTStorage implements IDataManager, IPlayerFileData {
     }
 
     public void save(EntityHuman entityhuman) {
+        if(!PaperConfig.savePlayerData) return; // Paper - Make player data saving configurable
         try {
             NBTTagCompound nbttagcompound = new NBTTagCompound();
 

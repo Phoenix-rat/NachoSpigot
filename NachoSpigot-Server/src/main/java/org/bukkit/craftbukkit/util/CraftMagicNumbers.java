@@ -54,8 +54,7 @@ public final class CraftMagicNumbers implements UnsafeValues {
 
     public static Item getItem(Material material) {
         // TODO: Don't use ID
-        Item item = Item.getById(material.getId());
-        return item;
+        return Item.getById(material.getId());
     }
 
     @Deprecated
@@ -143,4 +142,10 @@ public final class CraftMagicNumbers implements UnsafeValues {
         }
         return matches;
     }
+    // Paper start
+    @Override
+    public com.destroystokyo.paper.util.VersionFetcher getVersionFetcher() {
+        return new com.destroystokyo.paper.PaperVersionFetcher();
+    }
+    // Paper end
 }

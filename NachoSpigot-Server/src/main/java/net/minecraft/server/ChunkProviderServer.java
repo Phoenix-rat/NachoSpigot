@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import dev.cobblesword.nachospigot.events.ChunkPreLoadEvent;
+import me.elier.nachospigot.config.NachoConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 // CraftBukkit start
@@ -20,7 +21,6 @@ import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongSet;
 // TacoSpigot end
-import dev.cobblesword.nachospigot.Nacho;
 public class ChunkProviderServer implements IChunkProvider {
 
     private static final Logger b = LogManager.getLogger();
@@ -52,12 +52,14 @@ public class ChunkProviderServer implements IChunkProvider {
     }
 
     public void queueUnload(int i, int j) {
-        if (!Nacho.get().getConfig().doChunkUnload) {
+        if (!world.nachoSpigotConfig.doChunkUnload) {
             return;
         }
 
+        long key = LongHash.toLong(i, j); // IonSpigot - Only create key once
+
         // PaperSpigot start - Asynchronous lighting updates
-        Chunk chunk = chunks.get(LongHash.toLong(i, j));
+        Chunk chunk = chunks.get(key);
         if (chunk != null && chunk.world.paperSpigotConfig.useAsyncLighting && (chunk.pendingLightUpdates.get() > 0 || chunk.world.getTime() - chunk.lightUpdateTime < 20)) {
             return;
         }
@@ -76,9 +78,9 @@ public class ChunkProviderServer implements IChunkProvider {
         if (this.world.worldProvider.e()) {
             if (!this.world.c(i, j)) {
                 // CraftBukkit start
-                this.unloadQueue.add(LongHash.toLong(i, j));  // TacoSpigot - directly invoke LongHash
+                this.unloadQueue.add(key);  // TacoSpigot - directly invoke LongHash
 
-                Chunk c = chunks.get(LongHash.toLong(i, j));
+                Chunk c = chunks.get(key);
                 if (c != null) {
                     c.mustSave = true;
                 }
@@ -86,9 +88,9 @@ public class ChunkProviderServer implements IChunkProvider {
             }
         } else {
             // CraftBukkit start
-            this.unloadQueue.add(LongHash.toLong(i, j)); // TacoSpigot - directly invoke LongHash
+            this.unloadQueue.add(key); // TacoSpigot - directly invoke LongHash
 
-            Chunk c = chunks.get(LongHash.toLong(i, j));
+            Chunk c = chunks.get(key);
             if (c != null) {
                 c.mustSave = true;
             }
@@ -125,8 +127,9 @@ public class ChunkProviderServer implements IChunkProvider {
     }
 
     public Chunk getChunkAt(int i, int j, Runnable runnable) {
-        unloadQueue.remove(LongHash.toLong(i, j)); // TacoSpigot - directly invoke LongHash
-        Chunk chunk = chunks.get(LongHash.toLong(i, j));
+        long key = LongHash.toLong(i, j); // IonSpigot - Only create key once
+        unloadQueue.remove(key); // TacoSpigot - directly invoke LongHash
+        Chunk chunk = chunks.get(key);
         ChunkRegionLoader loader = null;
 
         if (this.chunkLoader instanceof ChunkRegionLoader) {
@@ -172,8 +175,9 @@ public class ChunkProviderServer implements IChunkProvider {
         return chunk;
     }
     public Chunk originalGetChunkAt(int i, int j) {
-        this.unloadQueue.remove(LongHash.toLong(i, j)); // TacoSpigot - directly invoke LongHash
-        Chunk chunk = (Chunk) this.chunks.get(LongHash.toLong(i, j));
+        long key = LongHash.toLong(i, j); // IonSpigot - Only create key once
+        this.unloadQueue.remove(key); // TacoSpigot - directly invoke LongHash
+        Chunk chunk = (Chunk) this.chunks.get(key);
         boolean newChunk = false;
         // CraftBukkit end
 
@@ -205,7 +209,7 @@ public class ChunkProviderServer implements IChunkProvider {
                         CrashReportSystemDetails crashreportsystemdetails = crashreport.a("Chunk to be generated");
 
                         crashreportsystemdetails.a("Location", (Object) String.format("%d,%d", new Object[] { Integer.valueOf(i), Integer.valueOf(j)}));
-                        crashreportsystemdetails.a("Position hash", (Object) Long.valueOf(LongHash.toLong(i, j))); // CraftBukkit - Use LongHash
+                        crashreportsystemdetails.a("Position hash", (Object) key); // CraftBukkit - Use LongHash
                         crashreportsystemdetails.a("Generator", (Object) this.chunkProvider.getName());
                         throw new ReportedException(crashreport);
                     }
@@ -213,7 +217,7 @@ public class ChunkProviderServer implements IChunkProvider {
                 newChunk = true; // CraftBukkit
             }
 
-            this.chunks.put(LongHash.toLong(i, j), chunk);
+            this.chunks.put(key, chunk);
             
             chunk.addEntities();
             
@@ -399,43 +403,43 @@ public class ChunkProviderServer implements IChunkProvider {
     }
 
     public boolean unloadChunks() {
-        if (!this.world.savingDisabled) {
-            // CraftBukkit start
-            Server server = this.world.getServer();
-            // TacoSpigot start - use iterator for unloadQueue
-            LongIterator iterator = unloadQueue.iterator();
-            for (int i = 0; i < 100 && iterator.hasNext(); ++i) {
-                long chunkcoordinates = iterator.next();
-                iterator.remove();
-                // TacoSpigot end
-                Chunk chunk = this.chunks.get(chunkcoordinates);
-                if (chunk == null) continue;
+        // CraftBukkit start
+        Server server = this.world.getServer();
+        // TacoSpigot start - use iterator for unloadQueue
+        LongIterator iterator = unloadQueue.iterator();
+        for (int i = 0; i < 100 && iterator.hasNext(); ++i) {
+            long chunkcoordinates = iterator.nextLong();
+            iterator.remove();
+            // TacoSpigot end
+            Chunk chunk = this.chunks.get(chunkcoordinates);
+            if (chunk == null) continue;
 
-                ChunkUnloadEvent event = new ChunkUnloadEvent(chunk.bukkitChunk);
-                server.getPluginManager().callEvent(event);
-                if (!event.isCancelled()) {
+            ChunkUnloadEvent event = new ChunkUnloadEvent(chunk.bukkitChunk);
+            server.getPluginManager().callEvent(event);
+            if (!event.isCancelled()) {
 
-                    if (chunk != null) {
-                        chunk.removeEntities();
+                if (chunk != null) {
+                    chunk.removeEntities();
+                    if (!this.world.savingDisabled) {
                         this.saveChunk(chunk);
                         this.saveChunkNOP(chunk);
-                        this.chunks.remove(chunkcoordinates); // CraftBukkit
                     }
+                    this.chunks.remove(chunkcoordinates); // CraftBukkit
+                }
 
-                    // this.unloadQueue.remove(olong);
+                // this.unloadQueue.remove(olong);
 
-                    // Update neighbor counts
-                    for (int x = -2; x < 3; x++) {
-                        for (int z = -2; z < 3; z++) {
-                            if (x == 0 && z == 0) {
-                                continue;
-                            }
+                // Update neighbor counts
+                for (int x = -2; x < 3; x++) {
+                    for (int z = -2; z < 3; z++) {
+                        if (x == 0 && z == 0) {
+                            continue;
+                        }
 
-                            Chunk neighbor = this.getChunkIfLoaded(chunk.locX + x, chunk.locZ + z);
-                            if (neighbor != null) {
-                                neighbor.setNeighborUnloaded(-x, -z);
-                                chunk.setNeighborUnloaded(x, z);
-                            }
+                        Chunk neighbor = this.getChunkIfLoaded(chunk.locX + x, chunk.locZ + z);
+                        if (neighbor != null) {
+                            neighbor.setNeighborUnloaded(-x, -z);
+                            chunk.setNeighborUnloaded(x, z);
                         }
                     }
                 }

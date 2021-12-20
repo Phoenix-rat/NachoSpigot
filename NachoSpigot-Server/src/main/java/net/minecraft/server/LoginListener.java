@@ -5,8 +5,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.exceptions.AuthenticationUnavailableException;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
+
 import java.math.BigInteger;
 import java.security.PrivateKey;
 import java.util.Arrays;
@@ -15,6 +14,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import javax.crypto.SecretKey;
+
 import org.apache.commons.lang3.Validate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,6 +23,7 @@ import org.apache.logging.log4j.Logger;
 import org.bukkit.craftbukkit.util.Waitable;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerPreLoginEvent;
+import org.bukkit.plugin.AuthorNagException;
 // CraftBukkit end
 
 public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBox {
@@ -30,7 +31,11 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
     // Paper start - Cache authenticator threads
     private static final AtomicInteger threadId = new AtomicInteger(0);
     private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newCachedThreadPool(
-            r -> new Thread(r, "User Authenticator #" + threadId.incrementAndGet())
+            r -> { // Yatopia start - make sure produced threads are daemon ones
+                Thread thread = new Thread(r, "User Authenticator #" + threadId.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            } // Yatopia end
     );
     // Paper end
 
@@ -76,6 +81,11 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
     }
 
     public void disconnect(String s) {
+        if (s == null) {
+            new AuthorNagException("Kick message was set to null, causing an exception!").printStackTrace();
+            s = "Kicked by plugin";
+        }
+
         try {
             LoginListener.c.info("Disconnecting " + this.d() + ": " + s);
             ChatComponentText chatcomponenttext = new ChatComponentText(s);
@@ -94,7 +104,7 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
         if (networkManager.spoofedUUID != null) {
             uuid = networkManager.spoofedUUID;
         } else {
-            uuid = UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + this.i.getName() ).getBytes( Charsets.UTF_8 ) );
+            uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + this.i.getName()).getBytes(Charsets.UTF_8));
         }
         this.i = new GameProfile(uuid, this.i.getName());
         if (networkManager.spoofedProfile != null) {
@@ -187,9 +197,13 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
         if (!Arrays.equals(this.e, packetlogininencryptionbegin.b(privatekey))) {
             throw new IllegalStateException("Invalid nonce!");
         } else {
-            this.loginKey = packetlogininencryptionbegin.a(privatekey);
-            this.g = LoginListener.EnumProtocolState.AUTHENTICATING;
-            this.networkManager.a(this.loginKey);
+            try {
+                this.loginKey = packetlogininencryptionbegin.a(privatekey);
+                this.g = LoginListener.EnumProtocolState.AUTHENTICATING;
+                this.networkManager.setupEncryption(this.loginKey);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Protocol error", ex);
+            }
             // Paper start - Cache authenticator threads
             authenticatorPool.execute(() -> {
                 GameProfile gameprofile = LoginListener.this.i;
@@ -232,40 +246,41 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
     public class LoginHandler {
 
         public void fireEvents() throws Exception {
-                            String playerName = i.getName();
-                            java.net.InetAddress address = ((java.net.InetSocketAddress) networkManager.getSocketAddress()).getAddress();
-                            java.util.UUID uniqueId = i.getId();
-                            final org.bukkit.craftbukkit.CraftServer server = LoginListener.this.server.server;
+            String playerName = i.getName();
+            java.net.InetAddress address = ((java.net.InetSocketAddress) networkManager.getSocketAddress()).getAddress();
+            java.util.UUID uniqueId = i.getId();
+            final org.bukkit.craftbukkit.CraftServer server = LoginListener.this.server.server;
 
-                            AsyncPlayerPreLoginEvent asyncEvent = new AsyncPlayerPreLoginEvent(playerName, address, uniqueId);
-                            server.getPluginManager().callEvent(asyncEvent);
+            AsyncPlayerPreLoginEvent asyncEvent = new AsyncPlayerPreLoginEvent(playerName, address, uniqueId);
+            server.getPluginManager().callEvent(asyncEvent);
 
-                            if (PlayerPreLoginEvent.getHandlerList().getRegisteredListeners().length != 0) {
-                                final PlayerPreLoginEvent event = new PlayerPreLoginEvent(playerName, address, uniqueId);
-                                if (asyncEvent.getResult() != PlayerPreLoginEvent.Result.ALLOWED) {
-                                    event.disallow(asyncEvent.getResult(), asyncEvent.getKickMessage());
-                                }
-                                Waitable<PlayerPreLoginEvent.Result> waitable = new Waitable<PlayerPreLoginEvent.Result>() {
-                                    @Override
-                                    protected PlayerPreLoginEvent.Result evaluate() {
-                                        server.getPluginManager().callEvent(event);
-                                        return event.getResult();
-                                    }};
+            if (PlayerPreLoginEvent.getHandlerList().getRegisteredListeners().length != 0) {
+                final PlayerPreLoginEvent event = new PlayerPreLoginEvent(playerName, address, uniqueId);
+                if (asyncEvent.getResult() != PlayerPreLoginEvent.Result.ALLOWED) {
+                    event.disallow(asyncEvent.getResult(), asyncEvent.getKickMessage());
+                }
+                Waitable<PlayerPreLoginEvent.Result> waitable = new Waitable<PlayerPreLoginEvent.Result>() {
+                    @Override
+                    protected PlayerPreLoginEvent.Result evaluate() {
+                        server.getPluginManager().callEvent(event);
+                        return event.getResult();
+                    }
+                };
 
-                                LoginListener.this.server.processQueue.add(waitable);
-                                if (waitable.get() != PlayerPreLoginEvent.Result.ALLOWED) {
-                                    disconnect(event.getKickMessage());
-                                    return;
-                                }
-                            } else {
-                                if (asyncEvent.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED) {
-                                    disconnect(asyncEvent.getKickMessage());
-                                    return;
-                                }
-                            }
-                            // CraftBukkit end
-                            LoginListener.c.info("UUID of player " + LoginListener.this.i.getName() + " is " + LoginListener.this.i.getId());
-                            LoginListener.this.g = LoginListener.EnumProtocolState.READY_TO_ACCEPT;
+                LoginListener.this.server.processQueue.add(waitable);
+                if (waitable.get() != PlayerPreLoginEvent.Result.ALLOWED) {
+                    disconnect(event.getKickMessage());
+                    return;
+                }
+            } else {
+                if (asyncEvent.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED) {
+                    disconnect(asyncEvent.getKickMessage());
+                    return;
+                }
+            }
+            // CraftBukkit end
+            LoginListener.c.info("UUID of player " + LoginListener.this.i.getName() + " is " + LoginListener.this.i.getId());
+            LoginListener.this.g = LoginListener.EnumProtocolState.READY_TO_ACCEPT;
         }
     }
     // Spigot end
@@ -280,6 +295,7 @@ public class LoginListener implements PacketLoginInListener, IUpdatePlayerListBo
 
         HELLO, KEY, AUTHENTICATING, READY_TO_ACCEPT, e, ACCEPTED;
 
-        private EnumProtocolState() {}
+        private EnumProtocolState() {
+        }
     }
 }

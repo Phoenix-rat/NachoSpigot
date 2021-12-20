@@ -20,7 +20,7 @@ import org.bukkit.map.MapView;
 import org.bukkit.plugin.messaging.PluginMessageRecipient;
 import org.bukkit.scoreboard.Scoreboard;
 // PaperSpigot start
-import org.github.paperspigot.Title;
+import com.destroystokyo.paper.Title;
 // PaperSpigot end
 
 /**
@@ -965,6 +965,14 @@ public interface Player extends HumanEntity, Conversable, CommandSender, Offline
     public void hidePlayer(Player player);
 
     /**
+     * Hides a player from this player
+     *
+     * @param player Player to hide
+     * @param onTab true to hide player on tab-list
+     */
+    public void hidePlayer(Player player, boolean onTab);
+
+    /**
      * Allows this player to see a player that was previously hidden
      *
      * @param player Player to show
@@ -979,6 +987,15 @@ public interface Player extends HumanEntity, Conversable, CommandSender, Offline
      *     player
      */
     public boolean canSee(Player player);
+
+    /**
+     * Checks to see if a entity has been hidden from this player compared to shooter
+     *
+     * @param entity Entity to check
+     * @return True if the provided player is not being hidden from this
+     *     entity
+     */
+    public boolean canSee(Entity entity);
 
     /**
      * Checks to see if this player is currently standing on a block. This

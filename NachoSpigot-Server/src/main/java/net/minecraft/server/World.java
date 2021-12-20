@@ -1,9 +1,12 @@
 package net.minecraft.server;
 
+import com.destroystokyo.paper.PaperWorldConfig;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import me.elier.nachospigot.config.NachoConfig;
+import me.elier.nachospigot.config.NachoWorldConfig;
 import me.suicidalkids.ion.movement.MovementCache;
 import org.bukkit.Bukkit;
 import org.bukkit.block.BlockState;
@@ -11,23 +14,23 @@ import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.event.CraftEventFactory;
 import org.bukkit.craftbukkit.util.CraftMagicNumbers;
-import org.bukkit.craftbukkit.util.LongHashSet;
 import org.bukkit.event.block.BlockCanBuildEvent;
 import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.generator.ChunkGenerator;
-import co.aikar.timings.SpigotTimings;
+
+import dev.cobblesword.nachospigot.commons.OptimizedWorldTileEntitySet;
 
 import java.util.*;
 import java.util.concurrent.Callable;
-
-import dev.cobblesword.nachospigot.Nacho;
 
 // PaperSpigot start
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 // PaperSpigot end
+
+import net.jafama.FastMath;
 
 // CraftBukkit start
 // CraftBukkit end
@@ -64,7 +67,7 @@ public abstract class World implements IBlockAccess {
     // Spigot end
     protected final Set<Entity> g = Sets.newHashSet(); // Paper
     //public final List<TileEntity> h = Lists.newArrayList(); // PaperSpigot - Remove unused list
-    public final List<TileEntity> tileEntityList = Lists.newArrayList();
+    public final OptimizedWorldTileEntitySet tileEntityList = new OptimizedWorldTileEntitySet();
     private final List<TileEntity> b = Lists.newArrayList();
     private final Set<TileEntity> c = Sets.newHashSet(); public Set<TileEntity> getTileEntityListUnload() { return c; }// Paper
     public final List<EntityHuman> players = Lists.newArrayList();
@@ -172,10 +175,11 @@ public abstract class World implements IBlockAccess {
 
     public final org.spigotmc.SpigotWorldConfig spigotConfig; // Spigot
 
-    public final org.github.paperspigot.PaperSpigotWorldConfig paperSpigotConfig; // PaperSpigot
+    public final PaperWorldConfig paperSpigotConfig; // PaperSpigot
 
     public final co.aikar.timings.WorldTimingsHandler timings; // Spigot
-    public final net.techcable.tacospigot.TacoSpigotWorldConfig tacoSpigotConfig;
+    public final net.techcable.tacospigot.TacoSpigotWorldConfig tacoSpigotConfig; // TacoSpigot
+    public final NachoWorldConfig nachoSpigotConfig; // NachoSpigot
 
     public CraftWorld getWorld() {
         return this.world;
@@ -191,8 +195,9 @@ public abstract class World implements IBlockAccess {
 
     protected World(IDataManager idatamanager, WorldData worlddata, WorldProvider worldprovider, MethodProfiler methodprofiler, boolean flag, ChunkGenerator gen, org.bukkit.World.Environment env) {
         this.spigotConfig = new org.spigotmc.SpigotWorldConfig( worlddata.getName() ); // Spigot
-        this.paperSpigotConfig = new org.github.paperspigot.PaperSpigotWorldConfig( worlddata.getName() ); // PaperSpigot
+        this.paperSpigotConfig = new PaperWorldConfig( worlddata.getName() ); // PaperSpigot
         this.tacoSpigotConfig = new net.techcable.tacospigot.TacoSpigotWorldConfig(worlddata.getName()); // TacoSpigot
+        this.nachoSpigotConfig = new NachoWorldConfig(worlddata.getName()); // NachoSpigot
         this.generator = gen;
         this.world = new CraftWorld((WorldServer) this, gen, env);
         this.ticksPerAnimalSpawns = this.getServer().getTicksPerAnimalSpawns(); // CraftBukkit
@@ -588,6 +593,8 @@ public abstract class World implements IBlockAccess {
     }
 
     public void applyPhysics(BlockPosition blockposition, Block block) {
+	    if (this.captureBlockStates) return;
+	    
         this.d(blockposition.west(), block);
         this.d(blockposition.east(), block);
         this.d(blockposition.down(), block);
@@ -1157,11 +1164,14 @@ public abstract class World implements IBlockAccess {
         }
     }
 
-    public void makeSound(Entity entity, String s, float f, float f1) {
-        for (IWorldAccess iWorldAccess : this.u) {
-            iWorldAccess.a(s, entity.locX, entity.locY, entity.locZ, f, f1);
+    public void makeSound(final Entity entity, final String s, final float f, final float f1) {
+        for (final IWorldAccess iWorldAccess : this.u) {
+            if (entity instanceof EntityHuman) {
+                iWorldAccess.a((EntityHuman) entity, s, entity.locX, entity.locY, entity.locZ, f, f1);
+            } else {
+                iWorldAccess.a(s, entity.locX, entity.locY, entity.locZ, f, f1);
+            }
         }
-
     }
 
     public void a(EntityHuman entityhuman, String s, float f, float f1) {
@@ -1707,7 +1717,7 @@ public abstract class World implements IBlockAccess {
             // Paper start - Use alternate implementation with faster contains
             java.util.Set<TileEntity> toRemove = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             toRemove.addAll(this.getTileEntityListUnload());
-            this.getTileEntityListUnload().removeAll(toRemove);
+            this.tileEntityList.removeAll(toRemove);
             // Paper end
 //            this.tileEntityList.removeAll(this.c);//c  == tileEntityListUnload
             //this.h.removeAll(this.c); // PaperSpigot - Remove unused list
@@ -1717,14 +1727,15 @@ public abstract class World implements IBlockAccess {
 
         // Spigot start
         int tilesThisCycle = 0;
-        for (tileTickPosition = 0; tileTickPosition < tileEntityList.size(); tileTickPosition++) { // PaperSpigot - Disable tick limiters
+        Iterator<TileEntity> tileIterator = this.tileEntityList.tickIterator(this.getTime());
+        while (tileIterator.hasNext()) { // PaperSpigot - Disable tick limiters
             tileTickPosition = (tileTickPosition < tileEntityList.size()) ? tileTickPosition : 0;
-            TileEntity tileentity = (TileEntity) this.tileEntityList.get(tileTickPosition);
+            TileEntity tileentity = (TileEntity) tileIterator.next();
             // Spigot start
             if (tileentity == null) {
                 getServer().getLogger().severe("Spigot has detected a null entity and has removed it, preventing a crash");
                 tilesThisCycle--;
-                this.tileEntityList.remove(tileTickPosition--);
+                tileIterator.remove();
                 continue;
             }
             // Spigot end
@@ -1733,11 +1744,13 @@ public abstract class World implements IBlockAccess {
                 BlockPosition blockposition = tileentity.getPosition();
 
                 if (this.isLoaded(blockposition) && this.N.a(blockposition)) {
-                    try {                            
+                    try {           
+			// Nacho start - Fix mob spawners still spawning mobs after being broken
 			if (this.getTileEntity(tileentity.getPosition()) == null){
-                            tileEntityList.remove(tileentity); //[Nacho-Spigot] Ghost Spawner Bug fixed By BeyazPolis
+                            tileIterator.remove();
                             continue;
                         }
+			// Nacho end
                         tileentity.tickTimer.startTiming(); // Spigot
                         ((IUpdatePlayerListBox) tileentity).c();
                     } catch (Throwable throwable2) {
@@ -1746,7 +1759,7 @@ public abstract class World implements IBlockAccess {
                         System.err.println("TileEntity threw exception at " + tileentity.world.getWorld().getName() + ":" + tileentity.position.getX() + "," + tileentity.position.getY() + "," + tileentity.position.getZ());
                         throwable2.printStackTrace();
                         tilesThisCycle--;
-                        this.tileEntityList.remove(tileTickPosition--);
+                        tileIterator.remove();
                         continue;
                         // PaperSpigot end
                     }
@@ -1760,7 +1773,7 @@ public abstract class World implements IBlockAccess {
 
             if (tileentity.x()) {
                 tilesThisCycle--;
-                this.tileEntityList.remove(tileTickPosition--);
+                tileIterator.remove();
                 //this.h.remove(tileentity); // PaperSpigot - Remove unused list
                 if (this.isLoaded(tileentity.getPosition())) {
                     this.getChunkAtWorldCoords(tileentity.getPosition()).e(tileentity.getPosition());
@@ -1847,7 +1860,7 @@ public abstract class World implements IBlockAccess {
         byte b0 = 32;
 
         // Spigot start
-        if ((!org.spigotmc.ActivationRange.checkIfActive(entity)) && (Nacho.get().getConfig().enableEntityActivation)) {
+        if ((!org.spigotmc.ActivationRange.checkIfActive(entity)) && (nachoSpigotConfig.enableEntityActivation)) {
             entity.ticksLived++;
             entity.inactiveTick();
             // PaperSpigot start - Remove entities in unloaded chunks
@@ -2147,8 +2160,8 @@ public abstract class World implements IBlockAccess {
         double d0 = 1.0D / ((axisalignedbb.d - axisalignedbb.a) * 2.0D + 1.0D);
         double d1 = 1.0D / ((axisalignedbb.e - axisalignedbb.b) * 2.0D + 1.0D);
         double d2 = 1.0D / ((axisalignedbb.f - axisalignedbb.c) * 2.0D + 1.0D);
-        double d3 = (1.0D - Math.floor(1.0D / d0) * d0) / 2.0D;
-        double d4 = (1.0D - Math.floor(1.0D / d2) * d2) / 2.0D;
+        double d3 = (1.0D - ((NachoConfig.enableFastMath ? FastMath.floor(1.0D / d0) : Math.floor(1.0D / d0)) * d0)) / 2.0D;
+        double d4 = (1.0D - ((NachoConfig.enableFastMath ? FastMath.floor(1.0D / d2) : Math.floor(1.0D / d2)) * d2)) / 2.0D;
 
         if (d0 >= 0.0D && d1 >= 0.0D && d2 >= 0.0D) {
             int i = 0;
@@ -2194,12 +2207,12 @@ public abstract class World implements IBlockAccess {
             return null;
         } else {
             // CraftBukkit start
-            if (capturedTileEntities.containsKey(blockposition)) {
-                return capturedTileEntities.get(blockposition);
+            TileEntity tileentity = null;
+            if (!capturedTileEntities.isEmpty() && (tileentity = capturedTileEntities.get(blockposition)) != null) {
+                return tileentity;
             }
             // CraftBukkit end
 
-            TileEntity tileentity = null;
             int i;
             TileEntity tileentity1;
 

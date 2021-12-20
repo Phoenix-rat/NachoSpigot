@@ -2,6 +2,7 @@ package net.minecraft.server;
 
 import com.eatthepath.uuid.FastUUID;
 import dev.cobblesword.nachospigot.commons.Constants;
+import me.elier.nachospigot.config.NachoConfig;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,9 +30,9 @@ public abstract class EntityProjectile extends Entity implements IProjectile {
     public EntityProjectile(World world, EntityLiving entityliving) {
         super(world);
         this.shooter = entityliving;
-        this.projectileSource = (org.bukkit.entity.LivingEntity) entityliving.getBukkitEntity(); // CraftBukkit
+        this.projectileSource = entityliving == null ? null : (org.bukkit.entity.LivingEntity) entityliving.getBukkitEntity(); // CraftBukkit
         this.setSize(0.25F, 0.25F);
-        this.setPositionRotation(entityliving.locX, entityliving.locY + (double) entityliving.getHeadHeight(), entityliving.locZ, entityliving.yaw, entityliving.pitch);
+        this.setPositionRotation(entityliving == null ? 0 : entityliving.locX, entityliving == null ? 0 : entityliving.locY + (double) entityliving.getHeadHeight(), entityliving == null ? 0 : entityliving.locZ, entityliving == null ? 0 : entityliving.yaw, entityliving == null ? 0 : entityliving.pitch);
         this.locX -= (double) (MathHelper.cos(this.yaw / 180.0F * 3.1415927F) * 0.16F);
         this.locY -= 0.10000000149011612D;
         this.locZ -= (double) (MathHelper.sin(this.yaw / 180.0F * 3.1415927F) * 0.16F);
@@ -136,6 +137,13 @@ public abstract class EntityProjectile extends Entity implements IProjectile {
                     float f = 0.3F;
                     AxisAlignedBB axisalignedbb = entity1.getBoundingBox().grow((double) f, (double) f, (double) f);
                     MovingObjectPosition movingobjectposition1 = axisalignedbb.a(vec3d, vec3d1);
+
+                    // IonSpigot start - Smooth Potting
+                    if (this instanceof EntityPotion && NachoConfig.smoothPotting &&
+                        movingobjectposition1 == null && getBoundingBox().b(entity1.getBoundingBox())) {
+                        movingobjectposition1 = new MovingObjectPosition(entity1);
+                    }
+                    // IonSpigot end
 
                     if (movingobjectposition1 != null)
                     {

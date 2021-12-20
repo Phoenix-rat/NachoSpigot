@@ -1,19 +1,30 @@
-# NachoSpigot [![GitHub Workflow Status](https://img.shields.io/github/workflow/status/CobbleSword/NachoSpigot/NachoSpigot%20Build)](https://nacho.sculas.xyz/)
+# NachoSpigot [![GitHub Workflow Status](https://img.shields.io/github/workflow/status/CobbleSword/NachoSpigot/NachoSpigot%20Build)](https://nightly.link/CobbleSword/NachoSpigot/workflows/build-nachospigot/master/NachoSpigot-server.zip)
 
-#### NachoSpigot is a fork of TacoSpigot 1.8.8
-NachoSpigot offers a number of enhancements to performance as well as bug fixes such as a built-in Anti-Crash system and being able to perform well with a large number of players.
+NachoSpigot offers a number of enhancements to performance as well as bug fixes and being able to perform well with a large number of players.
+
+While NachoSpigot hasn't been benchmarked properly yet, a server running NachoSpigot was successfully able to run a Minecraft event with 300 players and 20 TPS continuously.
+
+### Log4j Exploit ([CVE-2021-44228](https://github.com/advisories/GHSA-jfh8-c2jp-5v3q))
+An exploit was found in the Log4j library, and all versions of Minecraft are affected; both server and client.
+
+**NachoSpigot has fixed this issue, so it is safe to use NachoSpigot in production again.**
+
+For now, NachoSpigot has completely disabled lookups for Log4j if any other exploits come up since this one has raised popularity.
+If this ever causes issues, we can disable this and hope none of this ever happens again. We're also prepared for any new exploits with this so we can update Log4j ASAP.
 
 ## Current State
-Java 15 is now natively supported, and ProtocolLib and Citizens are patched at runtime to work with Nacho's patches.
-Nacho can now be used in production environments.
+Java 17 (LTS) is the recommended version to use, otherwise Java 11 is fine. Java 8 works, but is not recommended due to security issues.
 
-If you find any bugs, please create an issue or contact us in the [Discord server](https://discord.gg/ewcYeERKJw)!
+**NachoSpigot supports Java 8 to Java 17!**
 
-**NachoSpigot supports Java 8 to Java 16!**
+Nacho can be used in production environments with a good degree of stability.
+
+If you find any bugs, please [create an issue](../../issues/new) or contact us in the [Discord server](https://discord.gg/ewcYeERKJw)!
 
 ## Download
-**Stable:** [https://nacho.sculas.xyz/](https://nacho.sculas.xyz/)
-**Development:** [https://nachodev.sculas.xyz/](https://nachodev.sculas.xyz/)
+We do not provide stable release builds, since every commit should be stable to run.
+
+You can download the CI build for the latest commit [here](https://nightly.link/CobbleSword/NachoSpigot/workflows/build-nachospigot/master/NachoSpigot-server.zip).
 
 ## API Download
 [JitPack](https://jitpack.io/#CobbleSword/NachoSpigot/master-SNAPSHOT)
@@ -35,15 +46,18 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [Spigot-0138] Branchless NibbleArray by md5
 [Spigot-2380] Hitting in the air will always load the chunk at 0,0 by md_5
 
+[Paper-0021] Implement Paper VersionChecker
 [Paper-0033] Optimize explosions
 [Paper-0044] Use UserCache for player heads
 [Paper-0072] Fix Furnace cook time bug when lagging by Aikar
 [Paper-0076] Optimized Light Level Comparisons by Aikar
 [Paper-0083] Waving banner workaround by Gabscap
-[Paper-0085] Use a Shared Random for Entities by Aikar
-[Paper-0097] Don't save empty scoreboard teams to scoreboard.dat by Aikar
+[Paper-0068] Use a Shared Random for Entities by Aikar
+[Paper-0085] Add handshake event to allow plugins to handle client handshaking logic themselves
+[Paper-0093] Don't save empty scoreboard teams to scoreboard.dat by Aikar
+[Paper-0097] Faster redstone torch rapid clock removal by Martin Panzer
 [Paper-0100] Avoid blocking on Network Manager creation by Aikar
-[Paper-0102] Faster redstone torch rapid clock removal by Martin Panzer.
+[Paper-0103] Add setting for proxy online mode status
 [Paper-0112] Reduce IO ops opening a new region file by Antony Riley
 [Paper-0122] Don't let fishinghooks use portals by Zach Brown
 [Paper-0125] Optimize World.isLoaded(BlockPosition)Z by Aikar
@@ -59,7 +73,7 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [Paper-0266] [MC-99321] Dont check for blocked double chest for hoppers
 [Paper-0302] Don't load chunks for villager door checks by Aikar
 [Paper-0313] Optimize World Time Updates by Aikar
-[Paper-0321] Cleanup allocated favicon ByteBuf by Shane Freeder
+[Paper-0321] Server Tick Events
 [Paper-0342] Always process chunk removal in removeEntity by Aikar 2018
 [Paper-0344] [MC-111480] Start Entity ID's at 1
 [Paper-0346] [MC-135506] Experience should save as Integers
@@ -70,6 +84,8 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [Paper-0389] performance improvement for Chunk.getEntities by wea_ondara
 [Paper-0539] Optimize NetworkManager Exception Handling by Andrew Steinborn
 [Paper-0451] Reduce memory footprint of NBTTagCompound by spottedleaf
+[Paper-0797] Use Velocity compression and cipher natives
+[Paper-????] Cleanup allocated favicon ByteBuf by Shane Freeder
 
 <--> by Heath
 [Nacho-0001] Remove stream usage when counting entities
@@ -104,26 +120,25 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [Nacho-0030] add a ChunkPreLoadEvent
 [Nacho-0031] remove unused vars
 [Nacho-0033] Faster Operator search method
-[Nacho-0049] Don't allocate empty int arrays for particles
-[Nacho-0050] Option to disable Enchantment table ticking
+[Nacho-0048] Don't allocate empty int arrays for particles
+[Nacho-0049] Option to disable Enchantment table ticking
 
 <--> by Sculas
 [Nacho-0034] Remove Java 8 message from TacoSpigot which made it so you couldn't run Java 8 or higher
-[Nacho-0035] Made it so you can switch the brand name in nacho.json
+[Nacho-0035] Made it so you can switch the brand name in nacho.yml
 [Nacho-0036] Add toggles for commands "reload", "version" and "plugins"
 [Nacho-0037] Add toggle for "Faster Operator"
 [Nacho-0039] Fixed a bug in Netty's epoll when using Windows
 [Nacho-0040] Change deprecated Netty parameter in ResourceLeakDetector
 [Nacho-0041] Fix block placement
 [Nacho-0042] Remove Spigot Watchdog
-[Nacho-0043] Fix ProtocolLib
-[Nacho-0044] Fix Citizens
-[Nacho-0045] Async obfuscation
-[Nacho-0046] Add Player#jump and Player#sendActionBar
-[Nacho-0047] Little anti-malware
-[Nacho-0048] Little anti-crash
-[Nacho-0051] Custom knockback
-[Nacho-0052] Rework ServerConnection and MinecraftPipeline (credits to Minestom)
+[Nacho-0043] Fix Citizens
+[Nacho-0044] Async obfuscation
+[Nacho-0045] Add Player#jump and Player#sendActionBar
+[Nacho-0046] Little anti-malware
+[Nacho-0047] Little anti-crash
+[Nacho-0050] Custom knockback
+[Nacho-0051] Rework ServerConnection and MinecraftPipeline (credits to Minestom)
 
 [Yatopia-0030] Don't save Fireworks and Arrows by tr7zw (Arrows and firework Entities, eg stuck arrows in the ground)
 [Yatopia-0047] Smarter statistics ticking
@@ -136,6 +151,7 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [IonSpigot-0014] Faster Chunk Entity List
 [IonSpigot-0020] Faster EntityTracker Collections
 [IonSpigot-0035] Optimise Entity Collisions
+[IonSpigot-0037] Fast Cannon Entity Tracker
 
 [InsanePaper-269] Cache Chunk Coordinations
 [InsanePaper-390] Heavily optimize Tuinity controlled flush patch
@@ -180,4 +196,6 @@ See: [Contributors Page](https://github.com/CobbleSword/NachoSpigot/graphs/contr
 [MineTick-0017] Fix Insane Nether Portal Lag
 
 [Migot-0009] Prevent Creature Spawning in Unloaded Chunks
+
+[Sugarcane-0022] Add YAML comments
 ```

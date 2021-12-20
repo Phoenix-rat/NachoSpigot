@@ -9,7 +9,6 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.GameProfileRepository;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
-import dev.cobblesword.nachospigot.Nacho;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
@@ -18,6 +17,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.Proxy;
 import java.security.KeyPair;
 import java.text.SimpleDateFormat;
@@ -35,6 +35,7 @@ import java.util.concurrent.FutureTask;
 import javax.imageio.ImageIO;
 
 import io.netty.util.ResourceLeakDetector;
+import me.elier.nachospigot.config.NachoConfig;
 import org.apache.commons.lang3.Validate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,6 +45,8 @@ import org.apache.logging.log4j.Logger;
 import jline.console.ConsoleReader;
 import joptsimple.OptionSet;
 
+import org.apache.logging.log4j.util.LoaderUtil;
+import org.apache.logging.log4j.util.StackLocator;
 import org.bukkit.craftbukkit.Main;
 import co.aikar.timings.SpigotTimings; // Spigot
 import xyz.sculas.nacho.async.AsyncExplosions;
@@ -51,7 +54,7 @@ import xyz.sculas.nacho.async.AsyncExplosions;
 
 public abstract class MinecraftServer implements Runnable, ICommandListener, IAsyncTaskHandler, IMojangStatistics {
 
-    public static final Logger LOGGER = LogManager.getLogger();
+    public static final Logger LOGGER = LogManager.getLogger(MinecraftServer.class);
     public static final File a = new File("usercache.json");
     private static MinecraftServer l;
     public Convertable convertable;
@@ -66,7 +69,7 @@ public abstract class MinecraftServer implements Runnable, ICommandListener, IAs
     private String serverIp;
     private int u = -1; public int getServerPort() { return u; } // Nacho - OBFHELPER
     public WorldServer[] worldServer;
-    private PlayerList v;
+    private PlayerList v; // playerList
     private boolean isRunning = true;
     private boolean isStopped;
     private int ticks;
@@ -611,7 +614,13 @@ public abstract class MinecraftServer implements Runnable, ICommandListener, IAs
                     }
                     lastTick = curTime;
 
+                    // NachoSpigot start - backport tick events from Paper
+                    this.server.getPluginManager().callEvent(new com.destroystokyo.paper.event.server.ServerTickStartEvent(this.ticks+1));
                     this.A();
+                    long endTime = System.nanoTime();
+                    long remaining = (TICK_TIME - (endTime - lastTick)) - catchupTime;
+                    this.server.getPluginManager().callEvent(new com.destroystokyo.paper.event.server.ServerTickEndEvent(this.ticks, ((double)(endTime - lastTick) / 1000000D), remaining));
+                    // NachoSpigot end
                     this.Q = true;
                 }
                 // Spigot end
@@ -1111,7 +1120,7 @@ public abstract class MinecraftServer implements Runnable, ICommandListener, IAs
     }
 
     public String getServerModName() {
-        return Nacho.get().getConfig().serverBrandName; // [Nacho-0035] // NachoSpigot - NachoSpigot >  // TacoSpigot - TacoSpigot // PaperSpigot - PaperSpigot > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
+        return NachoConfig.serverBrandName; // [Nacho-0035] // NachoSpigot - NachoSpigot >  // TacoSpigot - TacoSpigot // PaperSpigot - PaperSpigot > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
     }
 
     public CrashReport b(CrashReport crashreport) {
